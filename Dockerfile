@@ -15,8 +15,9 @@ RUN apt-get update && apt-get install -y \
     dbus-x11 \
     libgtk-3-0 \
     libdbus-glib-1-2 \
+    libpci3 \
+    libegl1 \
     supervisor \
-    --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Create user and required directories
