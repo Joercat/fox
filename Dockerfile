@@ -24,8 +24,8 @@ RUN useradd -m user && \
     chown -R user:user /home/user && \
     mkdir -p /var/log/supervisor
 
-# Create supervisord config
-RUN cat > /etc/supervisor/conf.d/supervisord.conf << 'EOF'
+# Create supervisord config correctly using a RUN command
+RUN bash -c "cat > /etc/supervisor/conf.d/supervisord.conf << 'EOF'
 [supervisord]
 nodaemon=true
 user=root
@@ -45,7 +45,7 @@ stderr_logfile_maxbytes=0
 
 [program:matchbox]
 command=/usr/bin/matchbox-window-manager -use_titlebar no -use_cursor yes
-environment=DISPLAY=":0",HOME="/home/user"
+environment=DISPLAY=\":0\",HOME=\"/home/user\"
 user=user
 autostart=true
 autorestart=true
@@ -59,7 +59,7 @@ stderr_logfile_maxbytes=0
 [program:firefox]
 command=/start-firefox.sh
 user=user
-environment=DISPLAY=":0",HOME="/home/user"
+environment=DISPLAY=\":0\",HOME=\"/home/user\"
 autostart=true
 autorestart=true
 priority=30
@@ -79,10 +79,10 @@ stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
-EOF
+EOF"
 
 # Create start-vnc script
-RUN cat > /start-vnc.sh << 'EOF'
+RUN bash -c "cat > /start-vnc.sh << 'EOF'
 #!/bin/bash
 rm -f /tmp/.X0-lock /tmp/.X11-unix/X0 2>/dev/null
 exec Xvnc :0 \
@@ -97,21 +97,21 @@ exec Xvnc :0 \
     -AcceptCutText \
     -ZlibLevel 1 \
     -CompressionLevel 2
-EOF
+EOF"
 
 # Create start-firefox script
-RUN cat > /start-firefox.sh << 'EOF'
+RUN bash -c "cat > /start-firefox.sh << 'EOF'
 #!/bin/bash
 sleep 3
-if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
-    eval $(dbus-launch --sh-syntax)
+if [ -z \"\$DBUS_SESSION_BUS_ADDRESS\" ]; then
+    eval \$(dbus-launch --sh-syntax)
 fi
 exec firefox-esr \
     --no-remote \
     --new-instance \
     --setDefaultBrowser \
     --disable-crash-reporter
-EOF
+EOF"
 
 RUN chmod +x /start-vnc.sh /start-firefox.sh
 
