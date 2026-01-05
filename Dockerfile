@@ -4,6 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV HOME=/home/user
 ENV DISPLAY=:0
 
+# Install necessary packages
 RUN apt-get update && apt-get install -y \
     tigervnc-standalone-server \
     novnc \
@@ -18,13 +19,47 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Create user and directories
+# Create user and required directories
 RUN useradd -m user && \
     mkdir -p /home/user/.vnc /home/user/.mozilla /home/user/.cache && \
     chown -R user:user /home/user && \
     mkdir -p /var/log/supervisor
 
-# Create supervisord config using the standard heredoc syntax
+# 1. Create the start-vnc script
+RUN cat <<EOF > /start-vnc.sh
+#!/bin/bash
+# Clean up existing locks
+rm -f /tmp/.X0-lock /tmp/.X11-unix/X0 2>/dev/null
+# Start VNC server (fixed flags for TigerVNC 1.12+)
+exec Xvnc :0 \\
+    -geometry 1280x720 \\
+    -depth 24 \\
+    -rfbport 5900 \\
+    -SecurityTypes None \\
+    -AlwaysShared \\
+    -AcceptKeyEvents \\
+    -AcceptPointerEvents \\
+    -SendCutText \\
+    -AcceptCutText
+EOF
+
+# 2. Create the start-firefox script
+RUN cat <<EOF > /start-firefox.sh
+#!/bin/bash
+# Wait for VNC and Window Manager to be ready
+sleep 5
+# Ensure D-Bus is running for Firefox
+if [ -z "\$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval \$(dbus-launch --sh-syntax)
+fi
+exec firefox-esr \\
+    --no-remote \\
+    --new-instance \\
+    --setDefaultBrowser \\
+    --disable-crash-reporter
+EOF
+
+# 3. Create the supervisord config
 RUN cat <<EOF > /etc/supervisor/conf.d/supervisord.conf
 [supervisord]
 nodaemon=true
@@ -34,7 +69,7 @@ pidfile=/var/run/supervisord.pid
 childlogdir=/var/log/supervisor
 
 [program:vnc]
-command=/start-vnc.sh
+command=bash /start-vnc.sh
 autostart=true
 autorestart=true
 priority=10
@@ -57,7 +92,7 @@ stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
 
 [program:firefox]
-command=/start-firefox.sh
+command=bash /start-firefox.sh
 user=user
 environment=DISPLAY=":0",HOME="/home/user"
 autostart=true
@@ -81,40 +116,10 @@ stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
 EOF
 
-# Create start-vnc script
-RUN cat <<EOF > /start-vnc.sh
-#!/bin/bash
-rm -f /tmp/.X0-lock /tmp/.X11-unix/X0 2>/dev/null
-exec Xvnc :0 \\
-    -geometry 1280x720 \\
-    -depth 24 \\
-    -rfbport 5900 \\
-    -SecurityTypes None \\
-    -AlwaysShared \\
-    -AcceptKeyEvents \\
-    -AcceptPointerEvents \\
-    -SendCutText \\
-    -AcceptCutText \\
-    -ZlibLevel 1 \\
-    -CompressionLevel 2
-EOF
-
-# Create start-firefox script
-RUN cat <<EOF > /start-firefox.sh
-#!/bin/bash
-sleep 3
-if [ -z "\$DBUS_SESSION_BUS_ADDRESS" ]; then
-    eval \$(dbus-launch --sh-syntax)
-fi
-exec firefox-esr \\
-    --no-remote \\
-    --new-instance \\
-    --setDefaultBrowser \\
-    --disable-crash-reporter
-EOF
-
+# Make scripts executable
 RUN chmod +x /start-vnc.sh /start-firefox.sh
 
 EXPOSE 7860
 
+# Start Supervisor
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
