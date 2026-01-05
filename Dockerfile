@@ -120,7 +120,16 @@ EOF
 # Make scripts executable
 RUN chmod +x /start-vnc.sh /start-firefox.sh
 
+RUN cat <<EOF > /entrypoint.sh
+#!/bin/bash
+# Start supervisor in the background
+/usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf &
+
+tail -f /dev/null
+EOF
+
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 7860
 
-# Start Supervisor
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+ENTRYPOINT ["/entrypoint.sh"]
